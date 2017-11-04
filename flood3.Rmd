@@ -1,0 +1,184 @@
+---
+title: "Louisiana 2016 Flood"
+output:
+  html_document:
+    df_print: paged
+---
+```{r}
+library(dplyr) #useful functions for manipulating data frames
+library(dygraphs) #useful for graphing time series
+library(ggmap) #useful for plotting crime events on map
+library(xts) #needed to convert into time series properly
+library(gridExtra)
+library(knitr)
+loadedNamespaces()
+```
+
+
+The 2016 Louisiana flood period is between August 2nd 2016 and September 2nd 2016
+```{r}
+load("/Users/seungwonyang/Dropbox/crime/flood/dfgeo.RData")
+dfflood<-select(dfgeo,c("X","Y","COMMITTED","Date","Hour","month","DayOfWeek","CRIME","COMPLETE.DISTRICT"))
+dfflood<-dfflood[!duplicated(dfflood),]
+dfflood<-filter(dfflood,Date>="2016-08-02",Date<="2016-09-02")
+head(dfflood)
+```
+```{r}
+levels(dfflood$CRIME)
+```
+
+```{r}
+floodtheft<-filter(dfflood,CRIME=="THEFT")
+floodresburg<-filter(dfflood,CRIME=="RESIDENTIAL BURGLARY")
+floodnonres<-filter(dfflood,CRIME=="NON-RESIDENTIAL BURGLARY")
+floodassault<-filter(dfflood,CRIME=="ASSAULT")
+floodhom<-filter(dfflood,CRIME=="HOMICIDE")
+floodnarc<-filter(dfflood,CRIME=="NARCOTICS")
+```
+
+Check to make sure the data is aggregated and converted to time series properly
+```{r}
+dfflood_day<-aggregate(dfflood$COMMITTED,by=list(dfflood$Date),FUN=length)
+dfflood_day<-xts(dfflood_day$x,dfflood_day$Group.1)
+head(dfflood_day)
+```
+```{r}
+flooddates<-seq(min(dfflood$Date),max(dfflood$Date),by="day")
+flooddates.frame<-data.frame(timestamp=flooddates)
+```
+I can't program in R so I have to make unwieldy functions like this. If there were no crime events on a certain date it will add an entry with 0 for that date
+```{r}
+fillmissing<-function(l,dates)
+{
+  for(i in dates)
+  {
+    if(!(i %in% l$Group.1))
+    {
+      mydf<-data.frame(as.Date(i,origin="1970-01-01"),0)
+      names(mydf)<-names(l)
+      l<-rbind(l,mydf)
+    }
+  }
+  return(l)
+}
+```
+
+```{r}
+floodtheft_day<-aggregate(floodtheft$COMMITTED,by=list(floodtheft$Date),FUN=length)
+floodtheft_day<-fillmissing(floodtheft_day,flooddates)
+floodtheft_day<-xts(floodtheft_day$x,floodtheft_day$Group.1)
+
+floodresburg_day<-aggregate(floodresburg$COMMITTED,by=list(floodresburg$Date),FUN=length)
+floodresburg_day<-fillmissing(floodresburg_day,flooddates)
+floodresburg_day<-xts(floodresburg_day$x,floodresburg_day$Group.1)
+
+
+floodnonres_day<-aggregate(floodnonres$COMMITTED,by=list(floodnonres$Date),FUN=length)
+floodnonres_day<-fillmissing(floodnonres_day,flooddates)
+floodnonres_day<-xts(floodnonres_day$x,floodnonres_day$Group.1)
+
+
+floodassault_day<-aggregate(floodassault$COMMITTED,by=list(floodassault$Date),FUN=length)
+floodassault_day<-fillmissing(floodassault_day,flooddates)
+floodassault_day<-xts(floodassault_day$x,floodassault_day$Group.1)
+
+
+floodhom_day<-aggregate(floodhom$COMMITTED,by=list(floodhom$Date),FUN=length)
+floodhom_day<-fillmissing(floodhom_day,flooddates)
+floodhom_day<-xts(floodhom_day$x,floodhom_day$Group.1)
+
+floodnarc_day<-aggregate(floodnarc$COMMITTED,by=list(floodnarc$Date),FUN=length)
+floodnarc_day<-fillmissing(floodnarc_day,flooddates)
+floodnarc_day<-xts(floodnarc_day$x,floodnarc_day$Group.1)
+```
+
+```{r}
+
+floodcrimes_day<-cbind(floodtheft_day,floodresburg_day,floodnonres_day,floodassault_day,floodhom_day,floodnarc_day)
+dygraph(floodcrimes_day,main="Daily Crimes During 2016 Louisiana Flood",ylab="Crime Events/Day") %>%
+  dyOptions(drawPoints=TRUE,pointSize=2) %>%
+  dyShading(from="2016-08-02",to="2016-08-12",color="#FFE6E6") %>%
+  dyShading(from="2016-08-12",to="2016-08-22",color="#E6FFE6") %>%
+  dyShading(from="2016-08-22",to="2016-09-02",color="#E6E6FF") %>%
+  dyLegend(show="always",width=400)
+```
+
+
+
+
+```{r}
+dfflood2<-filter(dfflood,CRIME %in% c("THEFT","RESIDENTIAL BURGLARY","NON-RESIDENTIAL BURGLARY","VEHICLE BURGLARY","NARCOTICS","ASSAULT","HOMICIDE"))
+dfflood_bef<-filter(dfflood2,Date<="2016-08-11")
+dfflood_dur<-filter(dfflood2,Date>="2016-08-12",Date<="2016-08-22")
+dfflood_aft<-filter(dfflood2,Date>="2016-08-23")
+```
+```{r}
+#baton rouge geocoordinates: -91.221832,30.344436,-90.998726,30.559214
+bbox<-c(-91.221832,30.344436,-90.998726,30.559214)
+#load map of Baton Rouge
+brmap<-get_map(location=bbox,source="stamen",maptype="toner-lite")
+ggmap(brmap)
+```
+
+
+
+```{r}
+floodmap_bef_cat<-ggmap(brmap)+
+  geom_point(data=dfflood_bef,aes(x=X,y=Y,color=CRIME),size=1,alpha=0.3)+
+  labs(title="Before Flood",x=NULL,y=NULL)+
+  facet_wrap(~CRIME,nrow=1)+
+  theme(legend.position = "none")
+#floodmap_bef_cat
+```
+```{r}
+floodmap_dur_cat<-ggmap(brmap)+
+  geom_point(data=dfflood_dur,aes(x=X,y=Y,color=CRIME),size=1,alpha=0.3)+
+  labs(title="During Flood",x=NULL,y=NULL)+
+  facet_wrap(~CRIME,nrow=1)+
+  theme(legend.position = "none")
+#floodmap_dur_cat
+```
+
+```{r}
+floodmap_aft_cat<-ggmap(brmap)+
+  geom_point(data=dfflood_aft,aes(x=X,y=Y,color=CRIME),size=1,alpha=0.3)+
+  labs(title="After Flood",x=NULL,y=NULL)+
+  facet_wrap(~CRIME,nrow=1)+
+  theme(legend.position = "none")
+#floodmap_aft_cat
+```
+
+```{r}
+allmaps<-grid.arrange(floodmap_bef_cat,floodmap_dur_cat,floodmap_aft_cat,nrow=3)
+```
+TODO: Add heatmaps
+```{r}
+heatmap_bef<-ggmap(brmap, extent = "device") +
+  geom_density2d(data = dfflood_bef, aes(x = X, y = Y,color=CRIME), size = 0.3) + stat_density2d(data = dfflood_bef, aes(x = X, y = Y,color=CRIME, fill = ..level.., alpha = ..level..), size = 0.01, 
+    bins = 16, geom = "polygon") + scale_fill_gradient(low = "green", high = "red") + 
+    scale_alpha(range = c(0, 0.3), guide = FALSE)+
+  facet_wrap(~CRIME,nrow=1)+
+  theme(legend.position = "NONE")
+```
+```{r}
+heatmap_dur<-ggmap(brmap, extent = "device") +
+  geom_density2d(data = dfflood_dur, aes(x = X, y = Y,color=CRIME), size = 0.3) + stat_density2d(data = dfflood_dur, aes(x = X, y = Y,color=CRIME, fill = ..level.., alpha = ..level..), size = 0.01, 
+    bins = 16, geom = "polygon") + scale_fill_gradient(low = "green", high = "red") + 
+    scale_alpha(range = c(0, 0.3), guide = FALSE)+
+  facet_wrap(~CRIME,nrow=1)+
+  theme(legend.position = "NONE")
+```
+```{r}
+heatmap_aft<-ggmap(brmap, extent = "device") +
+  geom_density2d(data = dfflood_aft, aes(x = X, y = Y,color=CRIME), size = 0.3) + stat_density2d(data = dfflood_aft, aes(x = X, y = Y,color=CRIME, fill = ..level.., alpha = ..level..), size = 0.01, 
+    bins = 16, geom = "polygon") + scale_fill_gradient(low = "green", high = "red") + 
+    scale_alpha(range = c(0, 0.3), guide = FALSE)+
+  facet_wrap(~CRIME,nrow=1)+
+  theme(legend.position = "NONE")
+```
+
+```{r}
+ggmap(brmap) + geom_tile(data = dfflood_bef, aes(x = X, y = Y,color=CRIME, alpha = Frequency)) +
+  theme(axis.title.y = element_blank(), axis.title.x = element_blank())
+```
+

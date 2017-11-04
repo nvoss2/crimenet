@@ -1,0 +1,103 @@
+---
+title: "Louisiana 2016 Flood"
+output:
+  html_document:
+    df_print: paged
+---
+```{r}
+library(dplyr)
+library(dygraphs)
+library(ggmap)
+loadedNamespaces()
+```
+
+
+The 2016 Louisiana flood period is between August 2nd 2016 and September 2nd 2016
+```{r}
+load("~/dfgeo.RData")
+dfflood<-select(dfgeo,c("X","Y","COMMITTED","Date","Hour","month","DayOfWeek","CRIME","COMPLETE.DISTRICT"))
+dfflood<-dfflood[!duplicated(dfflood),]
+dfflood<-filter(dfflood,Date>="2016-08-02",Date<="2016-09-02")
+head(dfflood)
+```
+```{r}
+floodtheft<-filter(dfflood,CRIME=="THEFT")
+floodburg<-filter(dfflood,CRIME=="RESIDENTIAL BURGLARY")
+floodbat<-filter(dfflood,CRIME=="BATTERY")
+dfflood_day<-aggregate(dfflood$COMMITTED,by=list(dfflood$Date),FUN=length)
+dfflood_day<-as.ts(dfflood_day$x)
+floodtheft_day<-aggregate(floodtheft$COMMITTED,by=list(floodtheft$Date),FUN=length)
+floodtheft_day<-as.ts(floodtheft_day$x)
+floodburg_day<-aggregate(floodburg$COMMITTED,by=list(floodburg$Date),FUN=length)
+floodburg_day<-as.ts(floodburg_day$x)
+floodbat_day<-aggregate(floodbat$COMMITTED,by=list(floodbat$Date),FUN=length)
+floodbat_day<-as.ts(floodbat_day$x)
+```
+
+```{r}
+
+floodcrimes_day<-cbind(dfflood_day,floodtheft_day,floodburg_day,floodbat_day)
+dygraph(floodcrimes_day,main="Daily Crimes During 2016 Louisiana Flood")
+```
+
+
+
+
+```{r}
+dfflood_bef<-filter(dfflood,Date<="2016-08-09")
+dfflood_dur<-filter(dfflood,Date>="2016-08-10",Date<="2017-08-14")
+dfflood_aft<-filter(dfflood,Date>="2016-08-15")
+```
+```{r}
+#baton rouge geocoordinates: -91.221832,30.344436,-90.998726,30.559214
+bbox<-c(-91.221832,30.344436,-90.998726,30.559214)
+#load map of Baton Rouge
+brmap<-get_map(location=bbox,source="stamen",maptype="toner-lite")
+ggmap(brmap)
+```
+
+```{r}
+floodmap_bef<-ggmap(brmap)+
+  geom_point(data=dfflood_bef,aes(x=X,y=Y),color="#FF0000",size=1,alpha=0.5)+
+  labs(title="Before Flood")
+floodmap_bef
+```
+
+```{r}
+floodmap_dur<-ggmap(brmap)+
+  geom_point(data=dfflood_dur,aes(x=X,y=Y),color="#00FF00",size=1,alpha=0.5)+
+  labs(title="During Flood")
+floodmap_dur
+```
+```{r}
+floodmap_aft<-ggmap(brmap)+
+  geom_point(data=dfflood_aft,aes(x=X,y=Y),color="#0000FF",size=1,alpha=0.5)+
+  labs(title="After Flood")
+floodmap_aft
+```
+```{r}
+floodmap_bef_cat<-ggmap(brmap)+
+  geom_point(data=dfflood_bef,aes(x=X,y=Y,color=CRIME),size=1,alpha=0.5)+
+  labs(title="Before Flood")+
+  facet_wrap(~CRIME,nrow=4)+
+  theme(legend.position = "none")
+floodmap_bef_cat
+```
+```{r}
+floodmap_dur_cat<-ggmap(brmap)+
+  geom_point(data=dfflood_dur,aes(x=X,y=Y,color=CRIME),size=1,alpha=0.5)+
+  labs(title="During Flood")+
+  facet_wrap(~CRIME,nrow=4)+
+  theme(legend.position = "none")
+floodmap_dur_cat
+```
+
+```{r}
+floodmap_aft_cat<-ggmap(brmap)+
+  geom_point(data=dfflood_aft,aes(x=X,y=Y,color=CRIME),size=1,alpha=0.5)+
+  labs(title="After Flood")+
+  facet_wrap(~CRIME,nrow=4)+
+  theme(legend.position = "none")
+floodmap_aft_cat
+```
+
